@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Search Financial Data</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      form {
+        margin-bottom: 20px;
+      }
+      .result,
+      .search-results {
+        padding: 10px;
+        border: 1px solid #ccc;
+        margin-top: 10px;
+      }
+      .loading {
+        font-size: 16px;
+        color: #555;
+        margin-top: 20px;
+      }
+      .search-results ul {
+        list-style-type: none;
+        padding-left: 0;
+      }
+      .search-results li {
+        margin: 5px 0;
+        cursor: pointer;
+        color: #007bff;
+      }
+      .search-results li:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Search Financial Data by Company Name or Symbol</h1>
+    <form id="searchForm">
+      <label for="searchQuery">Enter Company Name or Symbol:</label>
+      <input type="text" id="searchQuery" name="searchQuery" required />
+      <button type="submit">Search</button>
+    </form>
+    <div id="loading" class="loading" style="display: none">Loading...</div>
+    <div id="searchResults" class="search-results" style="display: none"></div>
+    <div id="result" class="result"></div>
+
+    <script>
+      const form = document.getElementById("searchForm");
+      const resultDiv = document.getElementById("result");
+      const searchResultsDiv = document.getElementById("searchResults");
+      const loadingDiv = document.getElementById("loading");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const query = document.getElementById("searchQuery").value.trim();
+        if (!query) {
+          resultDiv.innerHTML =
+            '<p style="color: red;">Please enter a company name or symbol.</p>';
+          return;
+        }
+
+        searchResultsDiv.style.display = "none";
+        loadingDiv.style.display = "block";
+        resultDiv.innerHTML = "";
+
+        const API_KEY = "CFLxwWJtCE7FtsYOk58sfHc6dKHVycVv"; // Replace with your API key
+        const searchAPI = `https://financialmodelingprep.com/api/v3/search?query=${encodeURIComponent(
+          query
+        )}&apikey=${API_KEY}`;
+        const incomeStatementAPI = `https://financialmodelingprep.com/api/v3/income-statement/{symbol}?period=annual&apikey=${API_KEY}`;
+        const profileAPI = `https://financialmodelingprep.com/api/v3/profile/{symbol}?apikey=${API_KEY}`;
+
+        try {
+          // Search for symbol using the query (company name or symbol)
+          const searchResponse = await fetch(searchAPI);
+          if (!searchResponse.ok) {
+            throw new Error(`Search API Error: ${searchResponse.status}`);
+          }
+          const searchData = await searchResponse.json();
+          if (!searchData || searchData.length === 0) {
+            loadingDiv.style.display = "none";
+            resultDiv.innerHTML =
+              "<p>No results found for the given query.</p>";
+            return;
+          }
+
+          // If multiple matches, show the options to choose from
+          if (searchData.length > 1) {
+            loadingDiv.style.display = "none";
+            searchResultsDiv.style.display = "block";
+            searchResultsDiv.innerHTML = "<p>Choose a company:</p><ul>";
+            searchData.forEach((company) => {
+              searchResultsDiv.innerHTML += `
+              <li onclick="fetchCompanyData('${company.symbol}', '${company.name}')">
+                ${company.name} (${company.symbol})
+              </li>
+            `;
+            });
+          } else {
+            // If only one result, directly fetch the data
+            const companySymbol = searchData[0].symbol;
+            const companyName = searchData[0].name;
+            await fetchAndDisplayData(companySymbol, companyName);
+          }
+        } catch (error) {
+          loadingDiv.style.display = "none";
+          resultDiv.innerHTML = `<p style="color: red;">Failed to fetch data: ${error.message}</p>`;
+        }
+      });
+
+      async function fetchCompanyData(symbol, name) {
+        searchResultsDiv.style.display = "none";
+        loadingDiv.style.display = "block";
+        await fetchAndDisplayData(symbol, name);
+      }
+
+      async function fetchAndDisplayData(companySymbol, companyName) {
+        const API_KEY = "CFLxwWJtCE7FtsYOk58sfHc6dKHVycVv"; // Replace with your API key
+        const incomeStatementAPI = `https://financialmodelingprep.com/api/v3/income-statement/${companySymbol}?period=annual&apikey=${API_KEY}`;
+        const profileAPI = `https://financialmodelingprep.com/api/v3/profile/${companySymbol}?apikey=${API_KEY}`;
+
+        try {
+          // Fetch profile data using the symbol
+          const profileResponse = await fetch(profileAPI);
+          if (!profileResponse.ok) {
+            throw new Error(`Profile API Error: ${profileResponse.status}`);
+          }
+          const profileData = await profileResponse.json();
+          if (!profileData || !profileData[0]) {
+            loadingDiv.style.display = "none";
+            resultDiv.innerHTML =
+              "<p>No company profile data found for the given symbol.</p>";
+            return;
+          }
+
+          const companyProfile = profileData[0];
+          const {
+            sector: profileSector,
+            country: profileCountry,
+            website: profileWebsite,
+            currency: profileCurrency,
+          } = companyProfile;
+
+          // Fetch income statement data using the symbol
+          const incomeResponse = await fetch(incomeStatementAPI);
+          if (!incomeResponse.ok) {
+            throw new Error(
+              `Income Statement API Error: ${incomeResponse.status}`
+            );
+          }
+          const incomeData = await incomeResponse.json();
+          if (!incomeData || !incomeData[0]) {
+            loadingDiv.style.display = "none";
+            resultDiv.innerHTML =
+              "<p>No financial data found for the given symbol.</p>";
+            return;
+          }
+
+          const financialData = incomeData[0];
+          const {
+            date,
+            reportedCurrency,
+            calendarYear,
+            period,
+            grossProfit,
+            incomeBeforeTax,
+            totalAssets,
+          } = financialData;
+
+          // Format values (handle N/A and formatting for numbers)
+          const formatValue = (value) =>
+            value !== undefined && value !== null
+              ? value.toLocaleString()
+              : "N/A";
+
+          // Prepare the combined data
+          resultDiv.innerHTML = `<h2>Financial and Company Data for ${companyName}:</h2>`;
+
+          // Display combined data
+          resultDiv.innerHTML += `
+          <p><strong>Company Name:</strong> ${companyName || "N/A"}</p>
+          <p><strong>Date:</strong> ${date || "N/A"}</p>
+          <p><strong>Reported Currency:</strong> ${
+            reportedCurrency || "N/A"
+          }</p>
+          <p><strong>Calendar Year:</strong> ${calendarYear || "N/A"}</p>
+          <p><strong>Period:</strong> ${period || "N/A"}</p>
+          <p><strong>Gross Profit:</strong> $${formatValue(grossProfit)}</p>
+          <p><strong>Income Before Tax:</strong> $${formatValue(
+            incomeBeforeTax
+          )}</p>
+          <p><strong>Total Assets:</strong> $${formatValue(totalAssets)}</p>
+          <p><strong>Currency:</strong> ${profileCurrency || "N/A"}</p>
+          <p><strong>Website:</strong> <a href="${
+            profileWebsite || "#"
+          }" target="_blank">${profileWebsite || "N/A"}</a></p>
+          <p><strong>Sector:</strong> ${profileSector || "N/A"}</p>
+          <p><strong>Country:</strong> ${profileCountry || "N/A"}</p>
+        `;
+          loadingDiv.style.display = "none";
+        } catch (error) {
+          loadingDiv.style.display = "none";
+          resultDiv.innerHTML = `<p style="color: red;">Failed to fetch data: ${error.message}</p>`;
+        }
+      }
+      import { injectSpeedInsights } from "@vercel/speed-insights";
+
+      injectSpeedInsights();
+    </script>
+  </body>
+</html>
